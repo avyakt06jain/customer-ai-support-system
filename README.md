@@ -1,104 +1,175 @@
-# Phantom Agents: AI Customer Support Assistant
+# AI Customer Support System
 
-content: _Phantom Agents_ is a full-stack application built for the NSUToblivion'25 hackathon. Inspired by the theme of spectral creativity, this project brings to life a "Phantom Agent"—an intelligent, 24/7 AI customer support assistant that works tirelessly in the background to solve real-world problems for Small and Medium-sized Enterprises (SMEs). This agent "haunts" a company's knowledge base (PDFs or DOCX files) to provide instant, accurate answers. It's designed to understand user emotions, handle complaints with empathy, and intelligently escalate complex issues to human agents, ensuring a seamless and efficient customer experience.
+An intelligent, full-stack customer support assistant for small and medium-sized businesses. Upload company knowledge bases (PDF or DOCX), then chat with an AI that answers questions from your documents, detects user intent and sentiment, responds empathetically to complaints, and escalates to human agents when needed.
 
-# Live Demo & Links
+## Live Demo
 
-content:
+https://youtu.be/hA9zglc4x1w
 
-- _Frontend (Vercel):_ [https://phantom-agents-customer-support.vercel.app/]
-- _Backend API (Hugging Face):_ [https://avyakt06jain-phantom-agents-customer-support.hf.space/process]
-- _Video Demo:_ [https://github.com/avyakt06jain/phantom-agents-customer-support/blob/main/REC-20250826100138.mp4]
+<a href="https://youtu.be/hA9zglc4x1w">
+  <img src="https://img.youtube.com/vi/hA9zglc4x1w/maxresdefault.jpg" alt="AI Customer Support System — live demo" width="100%" />
+</a>
 
-# Tech Stack
+---
 
-content:
-| Area | Technology |
+## Overview
+
+This system gives SMEs a 24/7 support layer grounded in their own documentation. Instead of generic chatbot replies, answers are retrieved from uploaded files via a **Retrieval-Augmented Generation (RAG)** pipeline. A triage step classifies each message by **intent** (question, complaint, escalation) and **sentiment**, then routes the request to the appropriate response strategy.
+
+## Features
+
+- **Document-grounded Q&A** — Upload PDF or DOCX files to build a searchable knowledge base
+- **Multi-turn conversations** — Chat history is passed to the model for contextual replies
+- **Intent & sentiment triage** — Gemini classifies each query before generation
+- **Empathetic handling** — Complaints and negative sentiment trigger supportive, context-aware responses
+- **Smart escalation** — Explicit requests for a human agent receive an immediate handoff message
+- **Cached ingestion** — Documents are hashed (SHA-256); re-uploading the same file skips re-indexing
+- **CLI & API** — Use the web UI, REST API, or terminal chat via `main.py`
+
+## Tech Stack
+
+| Layer | Technologies |
 | :--- | :--- |
-| _Frontend_ | React, Next.js, Tailwind CSS |
-| _Backend_ | FastAPI, Uvicorn |
-| _AI/ML_ | Google Gemini (gemini-1.5-flash-latest), Sentence-Transformers (all-MiniLM-L6-v2), FAISS |
-| _Deployment_ | Vercel (Frontend), Docker & Hugging Face Spaces (Backend) |
+| **Frontend** | React, Next.js 13, TypeScript, Tailwind CSS, shadcn/ui, Radix UI |
+| **Backend** | Python, FastAPI, Uvicorn |
+| **AI / ML** | Google Gemini (`gemini-1.5-flash-latest`), Sentence Transformers (`all-MiniLM-L6-v2`), FAISS |
+| **Document parsing** | PyMuPDF (PDF), python-docx (DOCX) |
+| **Deployment** | Docker, Vercel (frontend), Hugging Face Spaces (backend) |
 
-# Features
+## Architecture
 
-content:
+![System architecture diagram](imgs/customer-ai-support-diagram.png)
 
-- _Full-Stack Application:_ A complete solution with a polished React frontend and a powerful FastAPI backend.
-- _File Upload Interface:_ Users can directly upload .pdf and .docx files to create a knowledge base.
-- _Conversational Q\&A:_ Engages in natural, multi-turn conversations with users.
-- _Intelligent Triage System:_ Automatically analyzes user queries to detect intent (Question, Complaint, Escalate) and sentiment.
-- _Empathetic Responses:_ Dynamically adjusts its tone to handle user complaints with empathy.
-- _Smart Escalation:_ Recognizes when a user needs human intervention and provides a clear path for escalation.
+### Project structure
 
-# Setup and Running Locally
+```
+customer-ai-support-system/
+├── backend/
+│   ├── app.py                      # FastAPI server (REST API)
+│   ├── main.py                     # CLI: ingest document + interactive chat
+│   ├── ingestion_pipeline/
+│   │   └── ingestionPipeline.py    # Parse, chunk, embed, index
+│   ├── inference_pipeline/
+│   │   └── inferencePipeline.py    # Triage, search, generate
+│   ├── knowledge_base_cache/       # Per-document FAISS index + chunk JSON
+│   ├── requirements.txt
+│   └── Dockerfile
+└── frontend/
+    └── phantom-agent/              # Next.js application
+        ├── app/
+        ├── components/
+        └── package.json
+```
 
-content: This project is a monorepo with two main parts: frontend and backend.
+## How it works
 
-## Backend Setup (FastAPI)
+### 1. Ingestion pipeline
 
-content:
+When a document is uploaded (via the API or CLI):
 
-1.  _Navigate to the backend directory:_
+1. **Hash** — SHA-256 of file bytes becomes the document ID
+2. **Cache check** — If `{hash}.index` exists in `knowledge_base_cache/`, ingestion is skipped
+3. **Parse** — PDF pages are processed in parallel (PyMuPDF); DOCX is split by paragraph with page heuristics
+4. **Chunk** — Headers/footers are suppressed; list items and section headers are merged intelligently
+5. **Vectorize** — Chunks are embedded with `all-MiniLM-L6-v2` and stored in a FAISS `IndexFlatL2`
 
-    cd backend
+### 2. Inference pipeline
 
-2.  _Create a Virtual Environment:_
+For each user message:
 
-    python -m venv venv
-    source venv/bin/activate # On Windows: venv\Scripts\activate
+1. **Triage** — Gemini returns JSON with `intent` (Question | Complaint | Escalate) and `sentiment` (Positive | Neutral | Negative)
+2. **Route**
+   - **Escalate** → immediate human handoff message (no RAG)
+   - **Complaint / Negative** → semantic search + empathetic answer prompt
+   - **Question** → semantic search + standard Q&A prompt
+3. **Semantic search** — Query embedding retrieves top-5 relevant chunks from FAISS
+4. **Generate** — Retrieved context and query are sent to Gemini with a path-specific prompt
 
-3.  _Install Dependencies:_
+## Getting started
 
-    pip install -r requirements.txt
+### Prerequisites
 
-4.  _Create .env File:_ Create a .env file inside the backend folder and add your API keys:
+- Python 3.11+
+- Node.js 18+
+- A [Google Gemini API key](https://aistudio.google.com/apikey)
 
-    API_KEY="06864514c746f45fb93a6e0421a052c7875d3d1fd841d870f397c9d50e4146f8"
-    GEMINI_API_KEY="your-google-gemini-api-key"
+### Backend
 
-5.  _Run the Backend Server:_
+```bash
+cd backend
 
-    uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
-    The backend API will be running at http://127.0.0.1:8000.
+pip install -r requirements.txt
+```
 
-## Frontend Setup (React)
+Create `backend/.env`:
 
-content:
+```env
+API_KEY=your-api-key-for-bearer-auth
+GEMINI_API_KEY=your-google-gemini-api-key
+```
 
-1.  _Navigate to the frontend directory (from the root):_
+**Option A — REST API**
 
-    cd frontend
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
 
-2.  _Install Dependencies:_
+API docs: `http://127.0.0.1:8000/docs`
 
-    npm install
+**Option B — CLI (no server)**
 
-3.  _Run the Frontend Development Server:_
+```bash
+python main.py /path/to/your-knowledge-base.pdf
+```
 
-    npm run dev
+### Frontend
 
-    The frontend application will be accessible at http://localhost:3000.
+```bash
+cd frontend/phantom-agent
 
-# Technical Workflow
+npm install
+npm run dev
+```
 
-content: The application is built on a sophisticated Retrieval-Augmented Generation (RAG) pipeline.
+Open `http://localhost:3000`. Point the chat client at your local backend URL (or your deployed API) and set the `Authorization: Bearer <API_KEY>` header to match `backend/.env`.
 
-## 1\. Ingestion Pipeline
+### Docker (backend)
 
-content: When a user _uploads a document_ via the frontend:
+```bash
+cd backend
+docker build -t customer-ai-support-api .
+docker run -p 7860:7860 --env-file .env customer-ai-support-api
+```
 
-1.  _File Upload & Hashing_: The file is sent to the /process endpoint. The backend generates a unique SHA256 hash from the file's content to act as its ID.
-2.  _Cache Check_: The system checks if a knowledge base for this hash already exists. If so, ingestion is skipped.
-3.  _Parse Content_: Based on the file type (.pdf or .docx), a specific parser extracts text and structural elements.
-4.  _Chunking & Vectorization_: The text is broken down into smaller chunks, which are then converted into vector embeddings and stored in a FAISS index.
+## API reference
 
-## 2\. Inference Pipeline
+**`POST /process`** (requires `Authorization: Bearer <API_KEY>`)
 
-content: For every subsequent query in the chat:
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `query` | string (form) | Yes | User message |
+| `history` | JSON string (form) | No | `[{"role":"user","content":"..."}, ...]` |
+| `document` | file (form) | No | PDF or DOCX to ingest; omit to use the active document |
 
-1.  _Triage & Routing: The user's query and conversation history are sent to Gemini for a quick classification of \*\*intent_ and _sentiment_.
-2.  _Decision Making_: Based on the triage result, the pipeline routes the query to the appropriate path (Escalation, Empathetic, or Standard Q\&A).
-3.  _Semantic Search_: The query is used to search the FAISS index for the most relevant context.
-4.  _Answer Generation_: The retrieved context is passed to Gemini with a dynamically selected prompt to generate the final answer.
+**Response**
+
+```json
+{
+  "answer": "...",
+  "document_hash": "sha256-hex"
+}
+```
+
+## Environment variables
+
+| Variable | Description |
+| :--- | :--- |
+| `GEMINI_API_KEY` | Google Generative AI API key |
+| `API_KEY` | Bearer token for `/process` authentication |
+
+---
+
+Built as a production-oriented RAG assistant for document-driven customer support.
